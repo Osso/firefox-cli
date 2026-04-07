@@ -163,7 +163,11 @@ fn find_session_file() -> Option<PathBuf> {
             if let Ok(entries) = std::fs::read_dir(&base) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_dir() && !path.file_name().map_or(true, |n| n.to_string_lossy().starts_with('.')) {
+                    if path.is_dir()
+                        && !path
+                            .file_name()
+                            .map_or(true, |n| n.to_string_lossy().starts_with('.'))
+                    {
                         let recovery = path.join("sessionstore-backups/recovery.jsonlz4");
                         if recovery.exists() {
                             candidates.push(recovery);
@@ -174,7 +178,9 @@ fn find_session_file() -> Option<PathBuf> {
         }
     }
 
-    candidates.into_iter().max_by_key(|p| p.metadata().ok().and_then(|m| m.modified().ok()))
+    candidates
+        .into_iter()
+        .max_by_key(|p| p.metadata().ok().and_then(|m| m.modified().ok()))
 }
 
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {
@@ -211,8 +217,16 @@ fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
                             let entry = &entries[index - 1];
                             tabs.push(SessionTab {
                                 window: win_idx + 1,
-                                title: entry.get("title").and_then(|t| t.as_str()).unwrap_or("No title").to_string(),
-                                url: entry.get("url").and_then(|u| u.as_str()).unwrap_or("").to_string(),
+                                title: entry
+                                    .get("title")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("No title")
+                                    .to_string(),
+                                url: entry
+                                    .get("url")
+                                    .and_then(|u| u.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
                             });
                         }
                     }
@@ -232,19 +246,26 @@ struct MarionetteConnection {
 
 impl MarionetteConnection {
     fn connect(port: u16) -> Result<Self> {
-        let stream = TcpStream::connect(format!("127.0.0.1:{}", port))
-            .context("Failed to connect to Firefox Marionette. Start Firefox with: firefox --marionette")?;
+        let stream = TcpStream::connect(format!("127.0.0.1:{}", port)).context(
+            "Failed to connect to Firefox Marionette. Start Firefox with: firefox --marionette",
+        )?;
         stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
 
-        let mut conn = Self { stream, message_id: 0 };
+        let mut conn = Self {
+            stream,
+            message_id: 0,
+        };
 
         // Read initial handshake
         conn.read_message()?;
 
         // Send newSession
-        conn.send("WebDriver:NewSession", serde_json::json!({
-            "capabilities": {}
-        }))?;
+        conn.send(
+            "WebDriver:NewSession",
+            serde_json::json!({
+                "capabilities": {}
+            }),
+        )?;
 
         Ok(conn)
     }
@@ -286,8 +307,14 @@ impl MarionetteConnection {
             if arr.len() >= 4 {
                 if !arr[2].is_null() {
                     let err = &arr[2];
-                    let error_type = err.get("error").and_then(|e| e.as_str()).unwrap_or("unknown");
-                    let message = err.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+                    let error_type = err
+                        .get("error")
+                        .and_then(|e| e.as_str())
+                        .unwrap_or("unknown");
+                    let message = err
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("Unknown error");
                     bail!("Marionette error ({}): {}", error_type, message);
                 }
                 return Ok(arr[3].clone());
@@ -298,24 +325,33 @@ impl MarionetteConnection {
     }
 
     fn execute_script(&mut self, script: &str) -> Result<serde_json::Value> {
-        self.send("WebDriver:ExecuteScript", serde_json::json!({
-            "script": script,
-            "args": []
-        }))
+        self.send(
+            "WebDriver:ExecuteScript",
+            serde_json::json!({
+                "script": script,
+                "args": []
+            }),
+        )
     }
 
     fn find_element(&mut self, selector: &str) -> Result<serde_json::Value> {
-        self.send("WebDriver:FindElement", serde_json::json!({
-            "using": "css selector",
-            "value": selector
-        }))
+        self.send(
+            "WebDriver:FindElement",
+            serde_json::json!({
+                "using": "css selector",
+                "value": selector
+            }),
+        )
     }
 
     fn find_elements(&mut self, selector: &str) -> Result<serde_json::Value> {
-        self.send("WebDriver:FindElements", serde_json::json!({
-            "using": "css selector",
-            "value": selector
-        }))
+        self.send(
+            "WebDriver:FindElements",
+            serde_json::json!({
+                "using": "css selector",
+                "value": selector
+            }),
+        )
     }
 }
 
@@ -328,18 +364,22 @@ async fn main() -> Result<()> {
     match cli.command {
         // Session commands (no Marionette needed)
         Command::Session { action } => {
-            let session_file = find_session_file()
-                .context("No Firefox session file found")?;
+            let session_file = find_session_file().context("No Firefox session file found")?;
             let session = load_session(&session_file)?;
             let mut tabs = get_session_tabs(&session);
 
             match action {
-                SessionCommand::List { urls_only, titles_only, search, limit } => {
+                SessionCommand::List {
+                    urls_only,
+                    titles_only,
+                    search,
+                    limit,
+                } => {
                     if let Some(ref term) = search {
                         let term_lower = term.to_lowercase();
                         tabs.retain(|t| {
-                            t.title.to_lowercase().contains(&term_lower) ||
-                            t.url.to_lowercase().contains(&term_lower)
+                            t.title.to_lowercase().contains(&term_lower)
+                                || t.url.to_lowercase().contains(&term_lower)
                         });
                     }
 
@@ -373,7 +413,11 @@ async fn main() -> Result<()> {
 
         // Marionette commands
         Command::Open { url } => {
-            let url = if url.contains("://") { url } else { format!("https://{}", url) };
+            let url = if url.contains("://") {
+                url
+            } else {
+                format!("https://{}", url)
+            };
             let mut conn = MarionetteConnection::connect(cli.port)?;
             conn.send("WebDriver:Navigate", serde_json::json!({ "url": url }))?;
 
@@ -381,13 +425,25 @@ async fn main() -> Result<()> {
             let final_url = conn.execute_script("return window.location.href")?;
 
             if cli.json {
-                println!("{}", serde_json::json!({
-                    "title": title.get("value").unwrap_or(&title),
-                    "url": final_url.get("value").unwrap_or(&final_url)
-                }));
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "title": title.get("value").unwrap_or(&title),
+                        "url": final_url.get("value").unwrap_or(&final_url)
+                    })
+                );
             } else {
-                println!("✓ {}", title.get("value").and_then(|v| v.as_str()).unwrap_or(""));
-                println!("  {}", final_url.get("value").and_then(|v| v.as_str()).unwrap_or(""));
+                println!(
+                    "✓ {}",
+                    title.get("value").and_then(|v| v.as_str()).unwrap_or("")
+                );
+                println!(
+                    "  {}",
+                    final_url
+                        .get("value")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                );
             }
         }
 
@@ -418,77 +474,99 @@ async fn main() -> Result<()> {
         Command::Click { selector } => {
             let mut conn = MarionetteConnection::connect(cli.port)?;
             let element = conn.find_element(&selector)?;
-            let elem_id = element.get("value")
+            let elem_id = element
+                .get("value")
                 .and_then(|v| v.as_object())
                 .and_then(|o| o.values().next())
                 .and_then(|v| v.as_str())
                 .context("Element not found")?;
 
-            conn.send("WebDriver:ElementClick", serde_json::json!({
-                "id": elem_id
-            }))?;
+            conn.send(
+                "WebDriver:ElementClick",
+                serde_json::json!({
+                    "id": elem_id
+                }),
+            )?;
             println!("✓ Clicked");
         }
 
         Command::Type { selector, text } => {
             let mut conn = MarionetteConnection::connect(cli.port)?;
             let element = conn.find_element(&selector)?;
-            let elem_id = element.get("value")
+            let elem_id = element
+                .get("value")
                 .and_then(|v| v.as_object())
                 .and_then(|o| o.values().next())
                 .and_then(|v| v.as_str())
                 .context("Element not found")?;
 
-            conn.send("WebDriver:ElementSendKeys", serde_json::json!({
-                "id": elem_id,
-                "text": text
-            }))?;
+            conn.send(
+                "WebDriver:ElementSendKeys",
+                serde_json::json!({
+                    "id": elem_id,
+                    "text": text
+                }),
+            )?;
             println!("✓ Typed");
         }
 
         Command::Fill { selector, text } => {
             let mut conn = MarionetteConnection::connect(cli.port)?;
             let element = conn.find_element(&selector)?;
-            let elem_id = element.get("value")
+            let elem_id = element
+                .get("value")
                 .and_then(|v| v.as_object())
                 .and_then(|o| o.values().next())
                 .and_then(|v| v.as_str())
                 .context("Element not found")?;
 
-            conn.send("WebDriver:ElementClear", serde_json::json!({
-                "id": elem_id
-            }))?;
-            conn.send("WebDriver:ElementSendKeys", serde_json::json!({
-                "id": elem_id,
-                "text": text
-            }))?;
+            conn.send(
+                "WebDriver:ElementClear",
+                serde_json::json!({
+                    "id": elem_id
+                }),
+            )?;
+            conn.send(
+                "WebDriver:ElementSendKeys",
+                serde_json::json!({
+                    "id": elem_id,
+                    "text": text
+                }),
+            )?;
             println!("✓ Filled");
         }
 
         Command::Press { key } => {
             let mut conn = MarionetteConnection::connect(cli.port)?;
             // Use Actions API for key press
-            conn.send("WebDriver:PerformActions", serde_json::json!({
-                "actions": [{
-                    "type": "key",
-                    "id": "keyboard",
-                    "actions": [
-                        { "type": "keyDown", "value": key },
-                        { "type": "keyUp", "value": key }
-                    ]
-                }]
-            }))?;
+            conn.send(
+                "WebDriver:PerformActions",
+                serde_json::json!({
+                    "actions": [{
+                        "type": "key",
+                        "id": "keyboard",
+                        "actions": [
+                            { "type": "keyDown", "value": key },
+                            { "type": "keyUp", "value": key }
+                        ]
+                    }]
+                }),
+            )?;
             println!("✓ Pressed {}", key);
         }
 
         Command::Screenshot { path, full } => {
             let mut conn = MarionetteConnection::connect(cli.port)?;
-            let result = conn.send("WebDriver:TakeScreenshot", serde_json::json!({
-                "full": full,
-                "hash": false
-            }))?;
+            let result = conn.send(
+                "WebDriver:TakeScreenshot",
+                serde_json::json!({
+                    "full": full,
+                    "hash": false
+                }),
+            )?;
 
-            let data = result.get("value")
+            let data = result
+                .get("value")
                 .and_then(|v| v.as_str())
                 .context("No screenshot data")?;
 
@@ -537,19 +615,31 @@ async fn main() -> Result<()> {
                     let text = match selector {
                         Some(sel) => {
                             let element = conn.find_element(&sel)?;
-                            let elem_id = element.get("value")
+                            let elem_id = element
+                                .get("value")
                                 .and_then(|v| v.as_object())
                                 .and_then(|o| o.values().next())
                                 .and_then(|v| v.as_str())
                                 .context("Element not found")?;
-                            let result = conn.send("WebDriver:GetElementText", serde_json::json!({
-                                "id": elem_id
-                            }))?;
-                            result.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                            let result = conn.send(
+                                "WebDriver:GetElementText",
+                                serde_json::json!({
+                                    "id": elem_id
+                                }),
+                            )?;
+                            result
+                                .get("value")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string()
                         }
                         None => {
                             let result = conn.execute_script("return document.body.innerText")?;
-                            result.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                            result
+                                .get("value")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string()
                         }
                     };
                     println!("{}", text);
@@ -564,35 +654,44 @@ async fn main() -> Result<()> {
                 }
                 GetCommand::Value { selector } => {
                     let element = conn.find_element(&selector)?;
-                    let elem_id = element.get("value")
+                    let elem_id = element
+                        .get("value")
                         .and_then(|v| v.as_object())
                         .and_then(|o| o.values().next())
                         .and_then(|v| v.as_str())
                         .context("Element not found")?;
-                    let result = conn.send("WebDriver:GetElementProperty", serde_json::json!({
-                        "id": elem_id,
-                        "name": "value"
-                    }))?;
+                    let result = conn.send(
+                        "WebDriver:GetElementProperty",
+                        serde_json::json!({
+                            "id": elem_id,
+                            "name": "value"
+                        }),
+                    )?;
                     let value = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
                     println!("{}", value);
                 }
                 GetCommand::Attr { selector, name } => {
                     let element = conn.find_element(&selector)?;
-                    let elem_id = element.get("value")
+                    let elem_id = element
+                        .get("value")
                         .and_then(|v| v.as_object())
                         .and_then(|o| o.values().next())
                         .and_then(|v| v.as_str())
                         .context("Element not found")?;
-                    let result = conn.send("WebDriver:GetElementAttribute", serde_json::json!({
-                        "id": elem_id,
-                        "name": name
-                    }))?;
+                    let result = conn.send(
+                        "WebDriver:GetElementAttribute",
+                        serde_json::json!({
+                            "id": elem_id,
+                            "name": name
+                        }),
+                    )?;
                     let attr = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
                     println!("{}", attr);
                 }
                 GetCommand::Count { selector } => {
                     let result = conn.find_elements(&selector)?;
-                    let count = result.get("value")
+                    let count = result
+                        .get("value")
                         .and_then(|v| v.as_array())
                         .map(|a| a.len())
                         .unwrap_or(0);
@@ -607,7 +706,8 @@ async fn main() -> Result<()> {
             match action {
                 TabsCommand::List => {
                     let result = conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
-                    let handles = result.get("value")
+                    let handles = result
+                        .get("value")
                         .and_then(|v| v.as_array())
                         .context("Failed to get window handles")?;
 
@@ -616,9 +716,13 @@ async fn main() -> Result<()> {
 
                     for (i, handle) in handles.iter().enumerate() {
                         if let Some(h) = handle.as_str() {
-                            conn.send("WebDriver:SwitchToWindow", serde_json::json!({ "handle": h }))?;
+                            conn.send(
+                                "WebDriver:SwitchToWindow",
+                                serde_json::json!({ "handle": h }),
+                            )?;
                             let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-                            let url = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
+                            let url =
+                                conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
                             tabs.push(serde_json::json!({
                                 "index": i,
                                 "title": title.get("value").and_then(|v| v.as_str()).unwrap_or(""),
@@ -630,14 +734,18 @@ async fn main() -> Result<()> {
 
                     // Switch back to original
                     if let Some(h) = current.get("value").and_then(|v| v.as_str()) {
-                        conn.send("WebDriver:SwitchToWindow", serde_json::json!({ "handle": h }))?;
+                        conn.send(
+                            "WebDriver:SwitchToWindow",
+                            serde_json::json!({ "handle": h }),
+                        )?;
                     }
 
                     if cli.json {
                         println!("{}", serde_json::to_string_pretty(&tabs)?);
                     } else {
                         for tab in &tabs {
-                            println!("{}: {} - {}",
+                            println!(
+                                "{}: {} - {}",
                                 tab.get("index").and_then(|i| i.as_u64()).unwrap_or(0),
                                 tab.get("title").and_then(|t| t.as_str()).unwrap_or(""),
                                 tab.get("url").and_then(|u| u.as_str()).unwrap_or("")
@@ -655,13 +763,18 @@ async fn main() -> Result<()> {
                 }
                 TabsCommand::Close { index } => {
                     if let Some(idx) = index {
-                        let result = conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
-                        let handles = result.get("value")
+                        let result =
+                            conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
+                        let handles = result
+                            .get("value")
                             .and_then(|v| v.as_array())
                             .context("Failed to get window handles")?;
 
                         if let Some(handle) = handles.get(idx).and_then(|h| h.as_str()) {
-                            conn.send("WebDriver:SwitchToWindow", serde_json::json!({ "handle": handle }))?;
+                            conn.send(
+                                "WebDriver:SwitchToWindow",
+                                serde_json::json!({ "handle": handle }),
+                            )?;
                         }
                     }
                     conn.send("WebDriver:CloseWindow", serde_json::json!({}))?;
@@ -669,19 +782,27 @@ async fn main() -> Result<()> {
                 }
                 TabsCommand::Switch { index } => {
                     let result = conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
-                    let handles = result.get("value")
+                    let handles = result
+                        .get("value")
                         .and_then(|v| v.as_array())
                         .context("Failed to get window handles")?;
 
-                    let handle = handles.get(index)
+                    let handle = handles
+                        .get(index)
                         .and_then(|h| h.as_str())
                         .context("Tab index out of range")?;
 
-                    conn.send("WebDriver:SwitchToWindow", serde_json::json!({ "handle": handle }))?;
+                    conn.send(
+                        "WebDriver:SwitchToWindow",
+                        serde_json::json!({ "handle": handle }),
+                    )?;
 
                     let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-                    println!("✓ Switched to tab {}: {}", index,
-                        title.get("value").and_then(|v| v.as_str()).unwrap_or(""));
+                    println!(
+                        "✓ Switched to tab {}: {}",
+                        index,
+                        title.get("value").and_then(|v| v.as_str()).unwrap_or("")
+                    );
                 }
             }
         }

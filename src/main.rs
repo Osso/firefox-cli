@@ -728,8 +728,7 @@ fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
                         serde_json::json!({ "handle": h }),
                     )?;
                     let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-                    let url =
-                        conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
+                    let url = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
                     tabs.push(serde_json::json!({
                         "index": i,
                         "title": title.get("value").and_then(|v| v.as_str()).unwrap_or(""),
@@ -770,8 +769,7 @@ fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
         }
         TabsCommand::Close { index } => {
             if let Some(idx) = index {
-                let result =
-                    conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
+                let result = conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
                 let handles = result
                     .get("value")
                     .and_then(|v| v.as_array())

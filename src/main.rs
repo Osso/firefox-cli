@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::io::{Read as IoRead, Write as IoWrite};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const DEFAULT_MARIONETTE_PORT: u16 = 2828;
 
@@ -149,38 +149,56 @@ enum SessionCommand {
 
 // --- Session File Reading ---
 
-fn find_session_file() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    let paths = [
+fn firefox_profile_bases(home: &Path) -> [PathBuf; 3] {
+    [
         home.join("snap/firefox/common/.mozilla/firefox"),
         home.join(".var/app/org.mozilla.firefox/.mozilla/firefox"),
         home.join(".mozilla/firefox"),
-    ];
+    ]
+}
 
-    let mut candidates = Vec::new();
-    for base in paths {
-        if base.exists() {
-            if let Ok(entries) = std::fs::read_dir(&base) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir()
-                        && !path
-                            .file_name()
-                            .map_or(true, |n| n.to_string_lossy().starts_with('.'))
-                    {
-                        let recovery = path.join("sessionstore-backups/recovery.jsonlz4");
-                        if recovery.exists() {
-                            candidates.push(recovery);
-                        }
-                    }
-                }
-            }
-        }
+fn is_visible_profile_dir(path: &Path) -> bool {
+    path.is_dir()
+        && path
+            .file_name()
+            .is_some_and(|name| !name.to_string_lossy().starts_with('.'))
+}
+
+fn find_recovery_file(profile_dir: &Path) -> Option<PathBuf> {
+    let recovery = profile_dir.join("sessionstore-backups/recovery.jsonlz4");
+    recovery.exists().then_some(recovery)
+}
+
+fn recovery_files_in_base(base: &Path) -> Vec<PathBuf> {
+    if !base.exists() {
+        return Vec::new();
     }
 
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return Vec::new();
+    };
+
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| is_visible_profile_dir(path))
+        .filter_map(|path| find_recovery_file(&path))
+        .collect()
+}
+
+fn newest_file(candidates: Vec<PathBuf>) -> Option<PathBuf> {
     candidates
         .into_iter()
-        .max_by_key(|p| p.metadata().ok().and_then(|m| m.modified().ok()))
+        .max_by_key(|path| path.metadata().ok().and_then(|meta| meta.modified().ok()))
+}
+
+fn find_session_file() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+    let candidates = firefox_profile_bases(&home)
+        .into_iter()
+        .flat_map(|base| recovery_files_in_base(&base))
+        .collect();
+    newest_file(candidates)
 }
 
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {

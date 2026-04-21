@@ -88,21 +88,31 @@ fn collect_tab_details(
     let mut tabs = Vec::new();
 
     for (index, handle) in handles.iter().enumerate() {
-        let Some(handle_str) = handle.as_str() else {
-            continue;
-        };
-        switch_to_window(conn, handle_str)?;
-        let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-        let url = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
-        tabs.push(tab_json(
-            index,
-            response_value_str(&title),
-            response_value_str(&url),
-            handle_str,
-        ));
+        if let Some(tab) = collect_tab_detail(conn, index, handle)? {
+            tabs.push(tab);
+        }
     }
 
     Ok(tabs)
+}
+
+fn collect_tab_detail(
+    conn: &mut MarionetteConnection,
+    index: usize,
+    handle: &serde_json::Value,
+) -> Result<Option<serde_json::Value>> {
+    let Some(handle_str) = handle.as_str() else {
+        return Ok(None);
+    };
+    switch_to_window(conn, handle_str)?;
+    let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
+    let url = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
+    Ok(Some(tab_json(
+        index,
+        response_value_str(&title),
+        response_value_str(&url),
+        handle_str,
+    )))
 }
 
 fn print_tabs(tabs: &[serde_json::Value], json: bool) -> Result<()> {

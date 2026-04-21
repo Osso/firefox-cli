@@ -528,17 +528,42 @@ fn handle_tabs_switch(conn: &mut MarionetteConnection, index: usize) -> Result<(
     Ok(())
 }
 
+enum TabsAction {
+    List,
+    New { url: Option<String> },
+    Close { index: Option<usize> },
+    Switch { index: usize },
+}
+
+fn classify_tabs_command(action: TabsCommand) -> TabsAction {
+    match action {
+        TabsCommand::List => TabsAction::List,
+        TabsCommand::New { url } => TabsAction::New { url },
+        TabsCommand::Close { index } => TabsAction::Close { index },
+        TabsCommand::Switch { index } => TabsAction::Switch { index },
+    }
+}
+
+fn execute_tabs_action(
+    conn: &mut MarionetteConnection,
+    action: TabsAction,
+    json: bool,
+) -> Result<()> {
+    match action {
+        TabsAction::List => handle_tabs_list(conn, json),
+        TabsAction::New { url } => handle_tabs_new(conn, url),
+        TabsAction::Close { index } => handle_tabs_close(conn, index),
+        TabsAction::Switch { index } => handle_tabs_switch(conn, index),
+    }
+}
+
 fn execute_tabs_command(
     conn: &mut MarionetteConnection,
     action: TabsCommand,
     json: bool,
 ) -> Result<()> {
-    match action {
-        TabsCommand::List => handle_tabs_list(conn, json),
-        TabsCommand::New { url } => handle_tabs_new(conn, url),
-        TabsCommand::Close { index } => handle_tabs_close(conn, index),
-        TabsCommand::Switch { index } => handle_tabs_switch(conn, index),
-    }
+    let tabs_action = classify_tabs_command(action);
+    execute_tabs_action(conn, tabs_action, json)
 }
 
 pub fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
@@ -611,10 +636,11 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use crate::cli::GetCommand;
+    use crate::cli::TabsCommand;
 
     use super::{
-        GetAction, classify_get_command, extract_element_id, handle_at_index, named_get_output,
-        response_value_str, tab_json, tab_output_line,
+        GetAction, TabsAction, classify_get_command, classify_tabs_command, extract_element_id,
+        handle_at_index, named_get_output, response_value_str, tab_json, tab_output_line,
     };
 
     #[test]
@@ -671,6 +697,15 @@ mod tests {
                 assert_eq!(output_key, "title");
             }
             _ => panic!("expected named action"),
+        }
+    }
+
+    #[test]
+    fn classify_tabs_command_maps_switch_index() {
+        let action = classify_tabs_command(TabsCommand::Switch { index: 4 });
+        match action {
+            TabsAction::Switch { index } => assert_eq!(index, 4),
+            _ => panic!("expected switch action"),
         }
     }
 }

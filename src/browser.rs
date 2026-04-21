@@ -377,12 +377,37 @@ fn tab_output_line(tab: &serde_json::Value) -> String {
     )
 }
 
+fn handle_at_index(handles: &[serde_json::Value], index: usize) -> Option<&str> {
+    handles.get(index).and_then(|value| value.as_str())
+}
+
 fn current_window_handle(conn: &mut MarionetteConnection) -> Result<Option<String>> {
     let current = conn.send("WebDriver:GetWindowHandle", serde_json::json!({}))?;
     Ok(current
         .get("value")
         .and_then(|value| value.as_str())
         .map(ToString::to_string))
+}
+
+fn restore_window_handle(conn: &mut MarionetteConnection, original: Option<String>) -> Result<()> {
+    if let Some(handle) = original {
+        switch_to_window(conn, &handle)?;
+    }
+    Ok(())
+}
+
+fn switch_to_optional_index(
+    conn: &mut MarionetteConnection,
+    handles: &[serde_json::Value],
+    index: Option<usize>,
+) -> Result<()> {
+    let Some(index) = index else {
+        return Ok(());
+    };
+    if let Some(handle) = handle_at_index(handles, index) {
+        switch_to_window(conn, handle)?;
+    }
+    Ok(())
 }
 
 fn collect_tab_details(
@@ -425,11 +450,7 @@ fn handle_tabs_list(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
     let handles = window_handles(conn)?;
     let original = current_window_handle(conn)?;
     let tabs = collect_tab_details(conn, &handles)?;
-
-    if let Some(handle) = original {
-        switch_to_window(conn, &handle)?;
-    }
-
+    restore_window_handle(conn, original)?;
     print_tabs(&tabs, json)
 }
 
@@ -444,13 +465,8 @@ fn handle_tabs_new(conn: &mut MarionetteConnection, url: Option<String>) -> Resu
 }
 
 fn handle_tabs_close(conn: &mut MarionetteConnection, index: Option<usize>) -> Result<()> {
-    if let Some(index) = index {
-        let handles = window_handles(conn)?;
-        if let Some(handle) = handles.get(index).and_then(|value| value.as_str()) {
-            switch_to_window(conn, handle)?;
-        }
-    }
-
+    let handles = window_handles(conn)?;
+    switch_to_optional_index(conn, &handles, index)?;
     conn.send("WebDriver:CloseWindow", serde_json::json!({}))?;
     println!("✓ Tab closed");
     Ok(())
@@ -458,10 +474,7 @@ fn handle_tabs_close(conn: &mut MarionetteConnection, index: Option<usize>) -> R
 
 fn handle_tabs_switch(conn: &mut MarionetteConnection, index: usize) -> Result<()> {
     let handles = window_handles(conn)?;
-    let handle = handles
-        .get(index)
-        .and_then(|value| value.as_str())
-        .context("Tab index out of range")?;
+    let handle = handle_at_index(&handles, index).context("Tab index out of range")?;
     switch_to_window(conn, handle)?;
 
     let title = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
@@ -556,7 +569,8 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_element_id, named_get_output, response_value_str, tab_json, tab_output_line,
+        extract_element_id, handle_at_index, named_get_output, response_value_str, tab_json,
+        tab_output_line,
     };
 
     #[test]
@@ -591,5 +605,13 @@ mod tests {
     fn tab_output_line_formats_tab_summary() {
         let tab = tab_json(3, "Docs", "https://docs.example", "window-3");
         assert_eq!(tab_output_line(&tab), "3: Docs - https://docs.example");
+    }
+
+    #[test]
+    fn handle_at_index_returns_string_handles_only() {
+        let handles = vec![serde_json::json!("window-a"), serde_json::json!(42)];
+        assert_eq!(handle_at_index(&handles, 0), Some("window-a"));
+        assert_eq!(handle_at_index(&handles, 1), None);
+        assert_eq!(handle_at_index(&handles, 2), None);
     }
 }

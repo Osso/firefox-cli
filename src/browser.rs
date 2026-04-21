@@ -266,14 +266,6 @@ fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) 
         .unwrap_or(0))
 }
 
-fn execute_get_title(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
-    execute_get_string_field(conn, "WebDriver:GetTitle", "title", json)
-}
-
-fn execute_get_url(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
-    execute_get_string_field(conn, "WebDriver:GetCurrentURL", "url", json)
-}
-
 fn execute_get_string_field(
     conn: &mut MarionetteConnection,
     webdriver_command: &str,
@@ -315,22 +307,72 @@ fn execute_get_count(conn: &mut MarionetteConnection, selector: &str) -> Result<
     Ok(())
 }
 
+enum GetAction {
+    Named {
+        webdriver_command: &'static str,
+        output_key: &'static str,
+    },
+    Text {
+        selector: Option<String>,
+    },
+    Html {
+        selector: String,
+    },
+    Value {
+        selector: String,
+    },
+    Attr {
+        selector: String,
+        name: String,
+    },
+    Count {
+        selector: String,
+    },
+}
+
+fn classify_get_command(what: GetCommand) -> GetAction {
+    match what {
+        GetCommand::Title => GetAction::Named {
+            webdriver_command: "WebDriver:GetTitle",
+            output_key: "title",
+        },
+        GetCommand::Url => GetAction::Named {
+            webdriver_command: "WebDriver:GetCurrentURL",
+            output_key: "url",
+        },
+        GetCommand::Text { selector } => GetAction::Text { selector },
+        GetCommand::Html { selector } => GetAction::Html { selector },
+        GetCommand::Value { selector } => GetAction::Value { selector },
+        GetCommand::Attr { selector, name } => GetAction::Attr { selector, name },
+        GetCommand::Count { selector } => GetAction::Count { selector },
+    }
+}
+
+fn execute_get_action(
+    conn: &mut MarionetteConnection,
+    action: GetAction,
+    json: bool,
+) -> Result<()> {
+    match action {
+        GetAction::Named {
+            webdriver_command,
+            output_key,
+        } => execute_get_string_field(conn, webdriver_command, output_key, json),
+        GetAction::Text { selector } => execute_get_text(conn, selector),
+        GetAction::Html { selector } => execute_get_html(conn, &selector),
+        GetAction::Value { selector } => execute_get_value(conn, &selector),
+        GetAction::Attr { selector, name } => execute_get_attr(conn, &selector, &name),
+        GetAction::Count { selector } => execute_get_count(conn, &selector),
+    }
+}
+
 fn execute_get_command(
     conn: &mut MarionetteConnection,
     what: GetCommand,
     json: bool,
 ) -> Result<()> {
-    match what {
-        GetCommand::Title => execute_get_title(conn, json)?,
-        GetCommand::Url => execute_get_url(conn, json)?,
-        GetCommand::Text { selector } => execute_get_text(conn, selector)?,
-        GetCommand::Html { selector } => execute_get_html(conn, &selector)?,
-        GetCommand::Value { selector } => execute_get_value(conn, &selector)?,
-        GetCommand::Attr { selector, name } => execute_get_attr(conn, &selector, &name)?,
-        GetCommand::Count { selector } => execute_get_count(conn, &selector)?,
-    }
-
-    Ok(())
+    let action = classify_get_command(what);
+    execute_get_action(conn, action, json)
 }
 
 pub fn handle_get(what: GetCommand, port: u16, json: bool) -> Result<()> {
@@ -568,9 +610,11 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::cli::GetCommand;
+
     use super::{
-        extract_element_id, handle_at_index, named_get_output, response_value_str, tab_json,
-        tab_output_line,
+        GetAction, classify_get_command, extract_element_id, handle_at_index, named_get_output,
+        response_value_str, tab_json, tab_output_line,
     };
 
     #[test]
@@ -613,5 +657,20 @@ mod tests {
         assert_eq!(handle_at_index(&handles, 0), Some("window-a"));
         assert_eq!(handle_at_index(&handles, 1), None);
         assert_eq!(handle_at_index(&handles, 2), None);
+    }
+
+    #[test]
+    fn classify_get_command_maps_title_to_named_action() {
+        let action = classify_get_command(GetCommand::Title);
+        match action {
+            GetAction::Named {
+                webdriver_command,
+                output_key,
+            } => {
+                assert_eq!(webdriver_command, "WebDriver:GetTitle");
+                assert_eq!(output_key, "title");
+            }
+            _ => panic!("expected named action"),
+        }
     }
 }

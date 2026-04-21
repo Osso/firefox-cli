@@ -279,6 +279,69 @@ fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
         .collect()
 }
 
+fn load_session_tabs() -> Result<Vec<SessionTab>> {
+    let session_file = find_session_file().context("No Firefox session file found")?;
+    let session = load_session(&session_file)?;
+    Ok(get_session_tabs(&session))
+}
+
+fn filter_session_tabs(
+    mut tabs: Vec<SessionTab>,
+    search: Option<&str>,
+    limit: Option<usize>,
+) -> Vec<SessionTab> {
+    if let Some(term) = search {
+        let term_lower = term.to_lowercase();
+        tabs.retain(|tab| {
+            tab.title.to_lowercase().contains(&term_lower)
+                || tab.url.to_lowercase().contains(&term_lower)
+        });
+    }
+
+    if let Some(max_tabs) = limit {
+        tabs.truncate(max_tabs);
+    }
+
+    tabs
+}
+
+fn print_default_session_tabs(tabs: &[SessionTab]) {
+    for (index, tab) in tabs.iter().enumerate() {
+        let title: String = tab.title.chars().take(70).collect();
+        println!("{:4}. {}", index + 1, title);
+        println!("      {}", tab.url);
+    }
+}
+
+fn print_session_tabs(
+    tabs: &[SessionTab],
+    json: bool,
+    urls_only: bool,
+    titles_only: bool,
+) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(tabs)?);
+        return Ok(());
+    }
+
+    if urls_only {
+        for tab in tabs {
+            println!("{}", tab.url);
+        }
+        return Ok(());
+    }
+
+    if titles_only {
+        for tab in tabs {
+            println!("{}", tab.title);
+        }
+        return Ok(());
+    }
+
+    print_default_session_tabs(tabs);
+    Ok(())
+}
+
 // --- Marionette Protocol ---
 
 struct MarionetteConnection {
@@ -398,9 +461,7 @@ impl MarionetteConnection {
 // --- Subcommand Handlers ---
 
 fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
-    let session_file = find_session_file().context("No Firefox session file found")?;
-    let session = load_session(&session_file)?;
-    let mut tabs = get_session_tabs(&session);
+    let tabs = load_session_tabs()?;
 
     match action {
         SessionCommand::List {
@@ -409,35 +470,8 @@ fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
             search,
             limit,
         } => {
-            if let Some(ref term) = search {
-                let term_lower = term.to_lowercase();
-                tabs.retain(|t| {
-                    t.title.to_lowercase().contains(&term_lower)
-                        || t.url.to_lowercase().contains(&term_lower)
-                });
-            }
-
-            if let Some(n) = limit {
-                tabs.truncate(n);
-            }
-
-            if json {
-                println!("{}", serde_json::to_string_pretty(&tabs)?);
-            } else if urls_only {
-                for tab in &tabs {
-                    println!("{}", tab.url);
-                }
-            } else if titles_only {
-                for tab in &tabs {
-                    println!("{}", tab.title);
-                }
-            } else {
-                for (i, tab) in tabs.iter().enumerate() {
-                    let title: String = tab.title.chars().take(70).collect();
-                    println!("{:4}. {}", i + 1, title);
-                    println!("      {}", tab.url);
-                }
-            }
+            let filtered_tabs = filter_session_tabs(tabs, search.as_deref(), limit);
+            print_session_tabs(&filtered_tabs, json, urls_only, titles_only)?;
         }
         SessionCommand::Count => {
             println!("{}", tabs.len());
@@ -945,7 +979,7 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::get_session_tabs;
+    use super::{SessionTab, filter_session_tabs, get_session_tabs};
 
     #[test]
     fn get_session_tabs_selects_active_entry_per_tab() {
@@ -1012,5 +1046,30 @@ mod tests {
         assert_eq!(tabs[0].window, 1);
         assert_eq!(tabs[0].title, "No title");
         assert_eq!(tabs[0].url, "");
+    }
+
+    #[test]
+    fn filter_session_tabs_applies_case_insensitive_search_and_limit() {
+        let tabs = vec![
+            SessionTab {
+                window: 1,
+                title: "Rust Book".to_string(),
+                url: "https://doc.rust-lang.org".to_string(),
+            },
+            SessionTab {
+                window: 1,
+                title: "Mozilla".to_string(),
+                url: "https://www.mozilla.org".to_string(),
+            },
+            SessionTab {
+                window: 2,
+                title: "Example".to_string(),
+                url: "https://example.com".to_string(),
+            },
+        ];
+
+        let filtered = filter_session_tabs(tabs, Some("MOZ"), Some(1));
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].title, "Mozilla");
     }
 }

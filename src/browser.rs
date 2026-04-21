@@ -89,38 +89,14 @@ pub fn click_element(selector: String, port: u16) -> Result<()> {
 
 pub fn type_into_element(selector: String, text: String, port: u16) -> Result<()> {
     let mut conn = MarionetteConnection::connect(port)?;
-    let element = conn.find_element(&selector)?;
-    let element_id = extract_element_id(&element)?;
-
-    conn.send(
-        "WebDriver:ElementSendKeys",
-        serde_json::json!({
-            "id": element_id,
-            "text": text
-        }),
-    )?;
+    input_text_into_element(&mut conn, &selector, &text, false)?;
     println!("✓ Typed");
     Ok(())
 }
 
 pub fn fill_element(selector: String, text: String, port: u16) -> Result<()> {
     let mut conn = MarionetteConnection::connect(port)?;
-    let element = conn.find_element(&selector)?;
-    let element_id = extract_element_id(&element)?;
-
-    conn.send(
-        "WebDriver:ElementClear",
-        serde_json::json!({
-            "id": element_id
-        }),
-    )?;
-    conn.send(
-        "WebDriver:ElementSendKeys",
-        serde_json::json!({
-            "id": element_id,
-            "text": text
-        }),
-    )?;
+    input_text_into_element(&mut conn, &selector, &text, true)?;
     println!("✓ Filled");
     Ok(())
 }
@@ -187,6 +163,50 @@ fn extract_element_id(element: &serde_json::Value) -> Result<&str> {
         .and_then(|object| object.values().next())
         .and_then(|value| value.as_str())
         .context("Element not found")
+}
+
+fn element_id_for_selector(conn: &mut MarionetteConnection, selector: &str) -> Result<String> {
+    let element = conn.find_element(selector)?;
+    let element_id = extract_element_id(&element)?;
+    Ok(element_id.to_string())
+}
+
+fn clear_element(conn: &mut MarionetteConnection, element_id: &str) -> Result<()> {
+    conn.send(
+        "WebDriver:ElementClear",
+        serde_json::json!({
+            "id": element_id
+        }),
+    )?;
+    Ok(())
+}
+
+fn send_keys_to_element(
+    conn: &mut MarionetteConnection,
+    element_id: &str,
+    text: &str,
+) -> Result<()> {
+    conn.send(
+        "WebDriver:ElementSendKeys",
+        serde_json::json!({
+            "id": element_id,
+            "text": text
+        }),
+    )?;
+    Ok(())
+}
+
+fn input_text_into_element(
+    conn: &mut MarionetteConnection,
+    selector: &str,
+    text: &str,
+    clear_first: bool,
+) -> Result<()> {
+    let element_id = element_id_for_selector(conn, selector)?;
+    if clear_first {
+        clear_element(conn, &element_id)?;
+    }
+    send_keys_to_element(conn, &element_id, text)
 }
 
 pub fn wait_for(target: Option<String>, url: Option<String>, port: u16) -> Result<()> {

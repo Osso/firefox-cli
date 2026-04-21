@@ -216,32 +216,55 @@ fn print_session_tabs(
     Ok(())
 }
 
-pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
-    let tabs = load_session_tabs()?;
+fn handle_session_list(
+    tabs: Vec<SessionTab>,
+    json: bool,
+    urls_only: bool,
+    titles_only: bool,
+    search: Option<String>,
+    limit: Option<usize>,
+) -> Result<()> {
+    let filtered_tabs = filter_session_tabs(tabs, search.as_deref(), limit);
+    print_session_tabs(&filtered_tabs, json, urls_only, titles_only)
+}
 
+fn session_tab_count(tabs: &[SessionTab]) -> usize {
+    tabs.len()
+}
+
+fn handle_session_count(tabs: &[SessionTab]) {
+    println!("{}", session_tab_count(tabs));
+}
+
+fn execute_session_command(
+    action: SessionCommand,
+    tabs: Vec<SessionTab>,
+    json: bool,
+) -> Result<()> {
     match action {
         SessionCommand::List {
             urls_only,
             titles_only,
             search,
             limit,
-        } => {
-            let filtered_tabs = filter_session_tabs(tabs, search.as_deref(), limit);
-            print_session_tabs(&filtered_tabs, json, urls_only, titles_only)?;
-        }
+        } => handle_session_list(tabs, json, urls_only, titles_only, search, limit),
         SessionCommand::Count => {
-            println!("{}", tabs.len());
+            handle_session_count(&tabs);
+            Ok(())
         }
     }
+}
 
-    Ok(())
+pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
+    let tabs = load_session_tabs()?;
+    execute_session_command(action, tabs, json)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         SessionTab, collect_window_session_tabs, extend_session_tabs_from_window,
-        filter_session_tabs, get_session_tabs, latest_session_recovery,
+        filter_session_tabs, get_session_tabs, latest_session_recovery, session_tab_count,
     };
     use std::path::{Path, PathBuf};
 
@@ -415,5 +438,22 @@ mod tests {
         assert_eq!(latest, second);
 
         fs::remove_dir_all(&home).expect("cleanup temp test dir");
+    }
+
+    #[test]
+    fn session_tab_count_matches_collection_size() {
+        let tabs = vec![
+            SessionTab {
+                window: 1,
+                title: "One".to_string(),
+                url: "https://one.example".to_string(),
+            },
+            SessionTab {
+                window: 2,
+                title: "Two".to_string(),
+                url: "https://two.example".to_string(),
+            },
+        ];
+        assert_eq!(session_tab_count(&tabs), 2);
     }
 }

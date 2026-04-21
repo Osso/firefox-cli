@@ -126,15 +126,19 @@ fn session_tab_from_entry(entry: &serde_json::Value, window: usize) -> SessionTa
     }
 }
 
+fn collect_window_session_tabs(window: &serde_json::Value, window_index: usize) -> Vec<SessionTab> {
+    window_tabs(window)
+        .iter()
+        .filter_map(|tab| active_tab_entry(tab))
+        .map(|entry| session_tab_from_entry(entry, window_index + 1))
+        .collect()
+}
+
 fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
     session_windows(session)
         .iter()
         .enumerate()
-        .flat_map(|(window_index, window)| {
-            window_tabs(window).iter().filter_map(move |tab| {
-                active_tab_entry(tab).map(|entry| session_tab_from_entry(entry, window_index + 1))
-            })
-        })
+        .flat_map(|(window_index, window)| collect_window_session_tabs(window, window_index))
         .collect()
 }
 
@@ -224,7 +228,7 @@ pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionTab, filter_session_tabs, get_session_tabs};
+    use super::{SessionTab, collect_window_session_tabs, filter_session_tabs, get_session_tabs};
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -335,5 +339,21 @@ mod tests {
             bases[2],
             PathBuf::from("/tmp/firefox-cli-home/.mozilla/firefox")
         );
+    }
+
+    #[test]
+    fn collect_window_session_tabs_uses_window_number_offset() {
+        let window = serde_json::json!({
+            "tabs": [
+                {
+                    "entries": [{"title": "Tab A", "url": "https://a.example"}]
+                }
+            ]
+        });
+
+        let tabs = collect_window_session_tabs(&window, 2);
+        assert_eq!(tabs.len(), 1);
+        assert_eq!(tabs[0].window, 3);
+        assert_eq!(tabs[0].title, "Tab A");
     }
 }

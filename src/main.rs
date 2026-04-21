@@ -677,12 +677,16 @@ fn response_value_str(result: &serde_json::Value) -> &str {
         .unwrap_or("")
 }
 
-fn print_named_get_value(key: &str, value: &str, json: bool) {
+fn named_get_output(key: &str, value: &str, json: bool) -> String {
     if json {
-        println!("{}", serde_json::json!({ key: value }));
+        serde_json::json!({ key: value }).to_string()
     } else {
-        println!("{}", value);
+        value.to_string()
     }
+}
+
+fn print_named_get_value(key: &str, value: &str, json: bool) {
+    println!("{}", named_get_output(key, value, json));
 }
 
 fn extract_element_id(element: &serde_json::Value) -> Result<&str> {
@@ -754,42 +758,61 @@ fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) 
         .unwrap_or(0))
 }
 
+fn execute_get_title(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
+    let result = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
+    print_named_get_value("title", response_value_str(&result), json);
+    Ok(())
+}
+
+fn execute_get_url(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
+    let result = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
+    print_named_get_value("url", response_value_str(&result), json);
+    Ok(())
+}
+
+fn execute_get_text(conn: &mut MarionetteConnection, selector: Option<String>) -> Result<()> {
+    let text = get_text(conn, selector)?;
+    println!("{}", text);
+    Ok(())
+}
+
+fn execute_get_html(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
+    let html = get_inner_html(conn, selector)?;
+    println!("{}", html);
+    Ok(())
+}
+
+fn execute_get_value(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
+    let value = get_element_named_value(conn, selector, "WebDriver:GetElementProperty", "value")?;
+    println!("{}", value);
+    Ok(())
+}
+
+fn execute_get_attr(conn: &mut MarionetteConnection, selector: &str, name: &str) -> Result<()> {
+    let attr = get_element_named_value(conn, selector, "WebDriver:GetElementAttribute", name)?;
+    println!("{}", attr);
+    Ok(())
+}
+
+fn execute_get_count(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
+    let count = get_matching_elements_count(conn, selector)?;
+    println!("{}", count);
+    Ok(())
+}
+
 fn execute_get_command(
     conn: &mut MarionetteConnection,
     what: GetCommand,
     json: bool,
 ) -> Result<()> {
     match what {
-        GetCommand::Title => {
-            let result = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-            print_named_get_value("title", response_value_str(&result), json);
-        }
-        GetCommand::Url => {
-            let result = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
-            print_named_get_value("url", response_value_str(&result), json);
-        }
-        GetCommand::Text { selector } => {
-            let text = get_text(conn, selector)?;
-            println!("{}", text);
-        }
-        GetCommand::Html { selector } => {
-            let html = get_inner_html(conn, &selector)?;
-            println!("{}", html);
-        }
-        GetCommand::Value { selector } => {
-            let value =
-                get_element_named_value(conn, &selector, "WebDriver:GetElementProperty", "value")?;
-            println!("{}", value);
-        }
-        GetCommand::Attr { selector, name } => {
-            let attr =
-                get_element_named_value(conn, &selector, "WebDriver:GetElementAttribute", &name)?;
-            println!("{}", attr);
-        }
-        GetCommand::Count { selector } => {
-            let count = get_matching_elements_count(conn, &selector)?;
-            println!("{}", count);
-        }
+        GetCommand::Title => execute_get_title(conn, json)?,
+        GetCommand::Url => execute_get_url(conn, json)?,
+        GetCommand::Text { selector } => execute_get_text(conn, selector)?,
+        GetCommand::Html { selector } => execute_get_html(conn, &selector)?,
+        GetCommand::Value { selector } => execute_get_value(conn, &selector)?,
+        GetCommand::Attr { selector, name } => execute_get_attr(conn, &selector, &name)?,
+        GetCommand::Count { selector } => execute_get_count(conn, &selector)?,
     }
 
     Ok(())
@@ -997,7 +1020,8 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SessionTab, extract_element_id, filter_session_tabs, get_session_tabs, response_value_str,
+        SessionTab, extract_element_id, filter_session_tabs, get_session_tabs, named_get_output,
+        response_value_str,
     };
 
     #[test]
@@ -1109,5 +1133,14 @@ mod tests {
         let missing = serde_json::json!({});
         assert_eq!(response_value_str(&scalar), "");
         assert_eq!(response_value_str(&missing), "");
+    }
+
+    #[test]
+    fn named_get_output_formats_json_and_plain_modes() {
+        assert_eq!(named_get_output("title", "Example", false), "Example");
+        assert_eq!(
+            named_get_output("title", "Example", true),
+            r#"{"title":"Example"}"#
+        );
     }
 }

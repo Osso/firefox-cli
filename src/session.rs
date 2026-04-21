@@ -137,12 +137,20 @@ fn collect_window_session_tabs(window: &serde_json::Value, window_index: usize) 
         .collect()
 }
 
+fn extend_session_tabs_from_window(
+    tabs: &mut Vec<SessionTab>,
+    window: &serde_json::Value,
+    window_index: usize,
+) {
+    tabs.extend(collect_window_session_tabs(window, window_index));
+}
+
 fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
-    session_windows(session)
-        .iter()
-        .enumerate()
-        .flat_map(|(window_index, window)| collect_window_session_tabs(window, window_index))
-        .collect()
+    let mut tabs = Vec::new();
+    for (window_index, window) in session_windows(session).iter().enumerate() {
+        extend_session_tabs_from_window(&mut tabs, window, window_index);
+    }
+    tabs
 }
 
 fn load_session_tabs() -> Result<Vec<SessionTab>> {
@@ -232,8 +240,8 @@ pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SessionTab, collect_window_session_tabs, filter_session_tabs, get_session_tabs,
-        latest_session_recovery,
+        SessionTab, collect_window_session_tabs, extend_session_tabs_from_window,
+        filter_session_tabs, get_session_tabs, latest_session_recovery,
     };
     use std::path::{Path, PathBuf};
 
@@ -361,6 +369,27 @@ mod tests {
         assert_eq!(tabs.len(), 1);
         assert_eq!(tabs[0].window, 3);
         assert_eq!(tabs[0].title, "Tab A");
+    }
+
+    #[test]
+    fn extend_session_tabs_from_window_appends_tabs() {
+        let window = serde_json::json!({
+            "tabs": [
+                {
+                    "entries": [{"title": "Tab B", "url": "https://b.example"}]
+                }
+            ]
+        });
+        let mut tabs = vec![SessionTab {
+            window: 1,
+            title: "Existing".to_string(),
+            url: "https://existing.example".to_string(),
+        }];
+
+        extend_session_tabs_from_window(&mut tabs, &window, 1);
+        assert_eq!(tabs.len(), 2);
+        assert_eq!(tabs[1].window, 2);
+        assert_eq!(tabs[1].title, "Tab B");
     }
 
     #[test]

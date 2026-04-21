@@ -2,6 +2,7 @@ mod app;
 mod browser;
 mod cli;
 mod connection;
+mod get_handlers;
 mod session;
 
 use anyhow::Result;

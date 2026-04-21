@@ -46,13 +46,16 @@ fn newest_file(candidates: Vec<PathBuf>) -> Option<PathBuf> {
         .max_by_key(|path| path.metadata().ok().and_then(|meta| meta.modified().ok()))
 }
 
-fn find_session_file() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    let candidates = firefox_profile_bases(&home)
+fn session_recovery_candidates(home: &Path) -> Vec<PathBuf> {
+    firefox_profile_bases(home)
         .into_iter()
         .flat_map(|base| recovery_files_in_base(&base))
-        .collect();
-    newest_file(candidates)
+        .collect()
+}
+
+fn find_session_file() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+    newest_file(session_recovery_candidates(&home))
 }
 
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {
@@ -222,6 +225,7 @@ pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{SessionTab, filter_session_tabs, get_session_tabs};
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn get_session_tabs_selects_active_entry_per_tab() {
@@ -313,5 +317,23 @@ mod tests {
         let filtered = filter_session_tabs(tabs, Some("MOZ"), Some(1));
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "Mozilla");
+    }
+
+    #[test]
+    fn firefox_profile_bases_builds_expected_paths() {
+        let home = Path::new("/tmp/firefox-cli-home");
+        let bases = super::firefox_profile_bases(home);
+        assert_eq!(
+            bases[0],
+            PathBuf::from("/tmp/firefox-cli-home/snap/firefox/common/.mozilla/firefox")
+        );
+        assert_eq!(
+            bases[1],
+            PathBuf::from("/tmp/firefox-cli-home/.var/app/org.mozilla.firefox/.mozilla/firefox")
+        );
+        assert_eq!(
+            bases[2],
+            PathBuf::from("/tmp/firefox-cli-home/.mozilla/firefox")
+        );
     }
 }

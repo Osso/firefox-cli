@@ -256,13 +256,15 @@ fn handle_session_count(tabs: &[SessionTab]) {
     println!("{}", session_tab_count(tabs));
 }
 
+struct SessionListParams {
+    urls_only: bool,
+    titles_only: bool,
+    search: Option<String>,
+    limit: Option<usize>,
+}
+
 enum SessionAction {
-    List {
-        urls_only: bool,
-        titles_only: bool,
-        search: Option<String>,
-        limit: Option<usize>,
-    },
+    List(SessionListParams),
     Count,
 }
 
@@ -273,24 +275,26 @@ fn classify_session_command(action: SessionCommand) -> SessionAction {
             titles_only,
             search,
             limit,
-        } => SessionAction::List {
+        } => SessionAction::List(SessionListParams {
             urls_only,
             titles_only,
             search,
             limit,
-        },
+        }),
         SessionCommand::Count => SessionAction::Count,
     }
 }
 
 fn execute_session_action(action: SessionAction, tabs: Vec<SessionTab>, json: bool) -> Result<()> {
     match action {
-        SessionAction::List {
-            urls_only,
-            titles_only,
-            search,
-            limit,
-        } => handle_session_list(tabs, json, urls_only, titles_only, search, limit),
+        SessionAction::List(params) => handle_session_list(
+            tabs,
+            json,
+            params.urls_only,
+            params.titles_only,
+            params.search,
+            params.limit,
+        ),
         SessionAction::Count => {
             handle_session_count(&tabs);
             Ok(())
@@ -527,6 +531,26 @@ mod tests {
         match action {
             SessionAction::Count => {}
             _ => panic!("expected count action"),
+        }
+    }
+
+    #[test]
+    fn classify_session_command_maps_list_params() {
+        let action = classify_session_command(SessionCommand::List {
+            urls_only: true,
+            titles_only: false,
+            search: Some("rust".to_string()),
+            limit: Some(2),
+        });
+
+        match action {
+            SessionAction::List(params) => {
+                assert!(params.urls_only);
+                assert!(!params.titles_only);
+                assert_eq!(params.search.as_deref(), Some("rust"));
+                assert_eq!(params.limit, Some(2));
+            }
+            _ => panic!("expected list action"),
         }
     }
 

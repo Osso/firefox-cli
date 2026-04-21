@@ -670,117 +670,134 @@ fn eval_script(script: String, port: u16, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn handle_get(what: GetCommand, port: u16, json: bool) -> Result<()> {
-    let mut conn = MarionetteConnection::connect(port)?;
+fn response_value_str(result: &serde_json::Value) -> &str {
+    result
+        .get("value")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+}
 
+fn print_named_get_value(key: &str, value: &str, json: bool) {
+    if json {
+        println!("{}", serde_json::json!({ key: value }));
+    } else {
+        println!("{}", value);
+    }
+}
+
+fn extract_element_id(element: &serde_json::Value) -> Result<&str> {
+    element
+        .get("value")
+        .and_then(|value| value.as_object())
+        .and_then(|object| object.values().next())
+        .and_then(|value| value.as_str())
+        .context("Element not found")
+}
+
+fn get_element_named_value(
+    conn: &mut MarionetteConnection,
+    selector: &str,
+    command: &str,
+    name: &str,
+) -> Result<String> {
+    let element = conn.find_element(selector)?;
+    let element_id = extract_element_id(&element)?;
+    let result = conn.send(
+        command,
+        serde_json::json!({
+            "id": element_id,
+            "name": name
+        }),
+    )?;
+    Ok(response_value_str(&result).to_string())
+}
+
+fn get_text_by_selector(conn: &mut MarionetteConnection, selector: &str) -> Result<String> {
+    let element = conn.find_element(selector)?;
+    let element_id = extract_element_id(&element)?;
+    let result = conn.send(
+        "WebDriver:GetElementText",
+        serde_json::json!({
+            "id": element_id
+        }),
+    )?;
+    Ok(response_value_str(&result).to_string())
+}
+
+fn get_body_text(conn: &mut MarionetteConnection) -> Result<String> {
+    let result = conn.execute_script("return document.body.innerText")?;
+    Ok(response_value_str(&result).to_string())
+}
+
+fn get_text(conn: &mut MarionetteConnection, selector: Option<String>) -> Result<String> {
+    match selector {
+        Some(selector) => get_text_by_selector(conn, &selector),
+        None => get_body_text(conn),
+    }
+}
+
+fn get_inner_html(conn: &mut MarionetteConnection, selector: &str) -> Result<String> {
+    let script = format!(
+        "return document.querySelector({}).innerHTML",
+        serde_json::to_string(selector)?
+    );
+    let result = conn.execute_script(&script)?;
+    Ok(response_value_str(&result).to_string())
+}
+
+fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) -> Result<usize> {
+    let result = conn.find_elements(selector)?;
+    Ok(result
+        .get("value")
+        .and_then(|value| value.as_array())
+        .map(|elements| elements.len())
+        .unwrap_or(0))
+}
+
+fn execute_get_command(
+    conn: &mut MarionetteConnection,
+    what: GetCommand,
+    json: bool,
+) -> Result<()> {
     match what {
         GetCommand::Title => {
             let result = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-            let title = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
-            if json {
-                println!("{}", serde_json::json!({ "title": title }));
-            } else {
-                println!("{}", title);
-            }
+            print_named_get_value("title", response_value_str(&result), json);
         }
         GetCommand::Url => {
             let result = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
-            let url = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
-            if json {
-                println!("{}", serde_json::json!({ "url": url }));
-            } else {
-                println!("{}", url);
-            }
+            print_named_get_value("url", response_value_str(&result), json);
         }
         GetCommand::Text { selector } => {
-            let text = match selector {
-                Some(sel) => {
-                    let element = conn.find_element(&sel)?;
-                    let elem_id = element
-                        .get("value")
-                        .and_then(|v| v.as_object())
-                        .and_then(|o| o.values().next())
-                        .and_then(|v| v.as_str())
-                        .context("Element not found")?;
-                    let result = conn.send(
-                        "WebDriver:GetElementText",
-                        serde_json::json!({
-                            "id": elem_id
-                        }),
-                    )?;
-                    result
-                        .get("value")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                }
-                None => {
-                    let result = conn.execute_script("return document.body.innerText")?;
-                    result
-                        .get("value")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                }
-            };
+            let text = get_text(conn, selector)?;
             println!("{}", text);
         }
         GetCommand::Html { selector } => {
-            let result = conn.execute_script(&format!(
-                "return document.querySelector({}).innerHTML",
-                serde_json::to_string(&selector)?
-            ))?;
-            let html = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            let html = get_inner_html(conn, &selector)?;
             println!("{}", html);
         }
         GetCommand::Value { selector } => {
-            let element = conn.find_element(&selector)?;
-            let elem_id = element
-                .get("value")
-                .and_then(|v| v.as_object())
-                .and_then(|o| o.values().next())
-                .and_then(|v| v.as_str())
-                .context("Element not found")?;
-            let result = conn.send(
-                "WebDriver:GetElementProperty",
-                serde_json::json!({
-                    "id": elem_id,
-                    "name": "value"
-                }),
-            )?;
-            let value = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            let value =
+                get_element_named_value(conn, &selector, "WebDriver:GetElementProperty", "value")?;
             println!("{}", value);
         }
         GetCommand::Attr { selector, name } => {
-            let element = conn.find_element(&selector)?;
-            let elem_id = element
-                .get("value")
-                .and_then(|v| v.as_object())
-                .and_then(|o| o.values().next())
-                .and_then(|v| v.as_str())
-                .context("Element not found")?;
-            let result = conn.send(
-                "WebDriver:GetElementAttribute",
-                serde_json::json!({
-                    "id": elem_id,
-                    "name": name
-                }),
-            )?;
-            let attr = result.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            let attr =
+                get_element_named_value(conn, &selector, "WebDriver:GetElementAttribute", &name)?;
             println!("{}", attr);
         }
         GetCommand::Count { selector } => {
-            let result = conn.find_elements(&selector)?;
-            let count = result
-                .get("value")
-                .and_then(|v| v.as_array())
-                .map(|a| a.len())
-                .unwrap_or(0);
+            let count = get_matching_elements_count(conn, &selector)?;
             println!("{}", count);
         }
     }
 
     Ok(())
+}
+
+fn handle_get(what: GetCommand, port: u16, json: bool) -> Result<()> {
+    let mut conn = MarionetteConnection::connect(port)?;
+    execute_get_command(&mut conn, what, json)
 }
 
 fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
@@ -979,7 +996,9 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionTab, filter_session_tabs, get_session_tabs};
+    use super::{
+        SessionTab, extract_element_id, filter_session_tabs, get_session_tabs, response_value_str,
+    };
 
     #[test]
     fn get_session_tabs_selects_active_entry_per_tab() {
@@ -1071,5 +1090,24 @@ mod tests {
         let filtered = filter_session_tabs(tabs, Some("MOZ"), Some(1));
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "Mozilla");
+    }
+
+    #[test]
+    fn extract_element_id_reads_webdriver_value() {
+        let element = serde_json::json!({
+            "value": {
+                "element-6066-11e4-a52e-4f735466cecf": "node-1"
+            }
+        });
+        let element_id = extract_element_id(&element).expect("element id should parse");
+        assert_eq!(element_id, "node-1");
+    }
+
+    #[test]
+    fn response_value_str_returns_empty_when_not_string() {
+        let scalar = serde_json::json!({ "value": 42 });
+        let missing = serde_json::json!({});
+        assert_eq!(response_value_str(&scalar), "");
+        assert_eq!(response_value_str(&missing), "");
     }
 }

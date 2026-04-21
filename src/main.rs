@@ -958,15 +958,22 @@ fn handle_tabs_switch(conn: &mut MarionetteConnection, index: usize) -> Result<(
     Ok(())
 }
 
+fn execute_tabs_command(
+    conn: &mut MarionetteConnection,
+    action: TabsCommand,
+    json: bool,
+) -> Result<()> {
+    match action {
+        TabsCommand::List => handle_tabs_list(conn, json),
+        TabsCommand::New { url } => handle_tabs_new(conn, url),
+        TabsCommand::Close { index } => handle_tabs_close(conn, index),
+        TabsCommand::Switch { index } => handle_tabs_switch(conn, index),
+    }
+}
+
 fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
     let mut conn = MarionetteConnection::connect(port)?;
-
-    match action {
-        TabsCommand::List => handle_tabs_list(&mut conn, json),
-        TabsCommand::New { url } => handle_tabs_new(&mut conn, url),
-        TabsCommand::Close { index } => handle_tabs_close(&mut conn, index),
-        TabsCommand::Switch { index } => handle_tabs_switch(&mut conn, index),
-    }
+    execute_tabs_command(&mut conn, action, json)
 }
 
 fn wait_for(target: Option<String>, url: Option<String>, port: u16) -> Result<()> {

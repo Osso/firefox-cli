@@ -106,16 +106,31 @@ fn window_tabs(window: &serde_json::Value) -> &[serde_json::Value] {
         .unwrap_or(&[])
 }
 
-fn active_tab_entry(tab: &serde_json::Value) -> Option<&serde_json::Value> {
-    let entries = tab.get("entries").and_then(|value| value.as_array())?;
-    let index = tab
-        .get("index")
+fn tab_entries(tab: &serde_json::Value) -> Option<&[serde_json::Value]> {
+    tab.get("entries")
+        .and_then(|value| value.as_array())
+        .map(Vec::as_slice)
+}
+
+fn tab_active_index(tab: &serde_json::Value) -> usize {
+    tab.get("index")
         .and_then(|value| value.as_u64())
-        .unwrap_or(1) as usize;
-    if index == 0 || index > entries.len() {
+        .unwrap_or(1) as usize
+}
+
+fn active_entry(
+    entries: &[serde_json::Value],
+    one_based_index: usize,
+) -> Option<&serde_json::Value> {
+    if one_based_index == 0 {
         return None;
     }
-    entries.get(index - 1)
+    entries.get(one_based_index - 1)
+}
+
+fn active_tab_entry(tab: &serde_json::Value) -> Option<&serde_json::Value> {
+    let entries = tab_entries(tab)?;
+    active_entry(entries, tab_active_index(tab))
 }
 
 fn session_tab_from_entry(entry: &serde_json::Value, window: usize) -> SessionTab {
@@ -302,9 +317,9 @@ mod tests {
     use crate::cli::SessionCommand;
 
     use super::{
-        SessionAction, SessionTab, classify_session_command, collect_window_session_tabs,
-        extend_session_tabs_from_window, filter_session_tabs, get_session_tabs,
-        latest_session_recovery, session_tab_count,
+        SessionAction, SessionTab, active_entry, classify_session_command,
+        collect_window_session_tabs, extend_session_tabs_from_window, filter_session_tabs,
+        get_session_tabs, latest_session_recovery, session_tab_count, tab_active_index,
     };
     use std::path::{Path, PathBuf};
 
@@ -513,5 +528,19 @@ mod tests {
             SessionAction::Count => {}
             _ => panic!("expected count action"),
         }
+    }
+
+    #[test]
+    fn tab_active_index_defaults_to_one() {
+        let tab = serde_json::json!({
+            "entries": [{"title": "One"}]
+        });
+        assert_eq!(tab_active_index(&tab), 1);
+    }
+
+    #[test]
+    fn active_entry_rejects_zero_index() {
+        let entries = vec![serde_json::json!({"title": "One"})];
+        assert!(active_entry(&entries, 0).is_none());
     }
 }

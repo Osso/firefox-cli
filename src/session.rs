@@ -236,23 +236,55 @@ fn handle_session_count(tabs: &[SessionTab]) {
     println!("{}", session_tab_count(tabs));
 }
 
-fn execute_session_command(
-    action: SessionCommand,
-    tabs: Vec<SessionTab>,
-    json: bool,
-) -> Result<()> {
+enum SessionAction {
+    List {
+        urls_only: bool,
+        titles_only: bool,
+        search: Option<String>,
+        limit: Option<usize>,
+    },
+    Count,
+}
+
+fn classify_session_command(action: SessionCommand) -> SessionAction {
     match action {
         SessionCommand::List {
             urls_only,
             titles_only,
             search,
             limit,
+        } => SessionAction::List {
+            urls_only,
+            titles_only,
+            search,
+            limit,
+        },
+        SessionCommand::Count => SessionAction::Count,
+    }
+}
+
+fn execute_session_action(action: SessionAction, tabs: Vec<SessionTab>, json: bool) -> Result<()> {
+    match action {
+        SessionAction::List {
+            urls_only,
+            titles_only,
+            search,
+            limit,
         } => handle_session_list(tabs, json, urls_only, titles_only, search, limit),
-        SessionCommand::Count => {
+        SessionAction::Count => {
             handle_session_count(&tabs);
             Ok(())
         }
     }
+}
+
+fn execute_session_command(
+    action: SessionCommand,
+    tabs: Vec<SessionTab>,
+    json: bool,
+) -> Result<()> {
+    let session_action = classify_session_command(action);
+    execute_session_action(session_action, tabs, json)
 }
 
 pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
@@ -262,9 +294,12 @@ pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::cli::SessionCommand;
+
     use super::{
-        SessionTab, collect_window_session_tabs, extend_session_tabs_from_window,
-        filter_session_tabs, get_session_tabs, latest_session_recovery, session_tab_count,
+        SessionAction, SessionTab, classify_session_command, collect_window_session_tabs,
+        extend_session_tabs_from_window, filter_session_tabs, get_session_tabs,
+        latest_session_recovery, session_tab_count,
     };
     use std::path::{Path, PathBuf};
 
@@ -455,5 +490,14 @@ mod tests {
             },
         ];
         assert_eq!(session_tab_count(&tabs), 2);
+    }
+
+    #[test]
+    fn classify_session_command_maps_count_variant() {
+        let action = classify_session_command(SessionCommand::Count);
+        match action {
+            SessionAction::Count => {}
+            _ => panic!("expected count action"),
+        }
     }
 }

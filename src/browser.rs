@@ -267,14 +267,21 @@ fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) 
 }
 
 fn execute_get_title(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
-    let result = conn.send("WebDriver:GetTitle", serde_json::json!({}))?;
-    print_named_get_value("title", response_value_str(&result), json);
-    Ok(())
+    execute_get_string_field(conn, "WebDriver:GetTitle", "title", json)
 }
 
 fn execute_get_url(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
-    let result = conn.send("WebDriver:GetCurrentURL", serde_json::json!({}))?;
-    print_named_get_value("url", response_value_str(&result), json);
+    execute_get_string_field(conn, "WebDriver:GetCurrentURL", "url", json)
+}
+
+fn execute_get_string_field(
+    conn: &mut MarionetteConnection,
+    webdriver_command: &str,
+    output_key: &str,
+    json: bool,
+) -> Result<()> {
+    let result = conn.send(webdriver_command, serde_json::json!({}))?;
+    print_named_get_value(output_key, response_value_str(&result), json);
     Ok(())
 }
 

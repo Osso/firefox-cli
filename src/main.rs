@@ -13,10 +13,7 @@ use browser::{
 use cli::{Cli, Command};
 use session::handle_session;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let cli = Cli::parse();
-
+fn run_cli(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Session { action } => handle_session(action, cli.json)?,
         Command::Open { url } => open_url(url, cli.port, cli.json)?,
@@ -36,4 +33,10 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    run_cli(cli)
 }

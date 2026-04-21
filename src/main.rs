@@ -223,36 +223,60 @@ struct SessionTab {
     url: String,
 }
 
-fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
-    let mut tabs = Vec::new();
-    if let Some(windows) = session.get("windows").and_then(|w| w.as_array()) {
-        for (win_idx, win) in windows.iter().enumerate() {
-            if let Some(win_tabs) = win.get("tabs").and_then(|t| t.as_array()) {
-                for tab in win_tabs {
-                    let index = tab.get("index").and_then(|i| i.as_u64()).unwrap_or(1) as usize;
-                    if let Some(entries) = tab.get("entries").and_then(|e| e.as_array()) {
-                        if index > 0 && index <= entries.len() {
-                            let entry = &entries[index - 1];
-                            tabs.push(SessionTab {
-                                window: win_idx + 1,
-                                title: entry
-                                    .get("title")
-                                    .and_then(|t| t.as_str())
-                                    .unwrap_or("No title")
-                                    .to_string(),
-                                url: entry
-                                    .get("url")
-                                    .and_then(|u| u.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                            });
-                        }
-                    }
-                }
-            }
-        }
+fn session_windows(session: &serde_json::Value) -> &[serde_json::Value] {
+    session
+        .get("windows")
+        .and_then(|windows| windows.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn window_tabs(window: &serde_json::Value) -> &[serde_json::Value] {
+    window
+        .get("tabs")
+        .and_then(|tabs| tabs.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn active_tab_entry(tab: &serde_json::Value) -> Option<&serde_json::Value> {
+    let entries = tab.get("entries").and_then(|value| value.as_array())?;
+    let index = tab
+        .get("index")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(1) as usize;
+    if index == 0 || index > entries.len() {
+        return None;
     }
-    tabs
+    entries.get(index - 1)
+}
+
+fn session_tab_from_entry(entry: &serde_json::Value, window: usize) -> SessionTab {
+    SessionTab {
+        window,
+        title: entry
+            .get("title")
+            .and_then(|title| title.as_str())
+            .unwrap_or("No title")
+            .to_string(),
+        url: entry
+            .get("url")
+            .and_then(|url| url.as_str())
+            .unwrap_or("")
+            .to_string(),
+    }
+}
+
+fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
+    session_windows(session)
+        .iter()
+        .enumerate()
+        .flat_map(|(window_index, window)| {
+            window_tabs(window).iter().filter_map(move |tab| {
+                active_tab_entry(tab).map(|entry| session_tab_from_entry(entry, window_index + 1))
+            })
+        })
+        .collect()
 }
 
 // --- Marionette Protocol ---
@@ -917,4 +941,76 @@ fn base64_decode(input: &str) -> Result<Vec<u8>> {
     base64::engine::general_purpose::STANDARD
         .decode(data)
         .context("Failed to decode base64")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_session_tabs;
+
+    #[test]
+    fn get_session_tabs_selects_active_entry_per_tab() {
+        let session = serde_json::json!({
+            "windows": [
+                {
+                    "tabs": [
+                        {
+                            "index": 2,
+                            "entries": [
+                                {"title": "Old", "url": "https://old.example"},
+                                {"title": "Current", "url": "https://current.example"}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "tabs": [
+                        {
+                            "entries": [
+                                {"title": "Default Index", "url": "https://default.example"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let tabs = get_session_tabs(&session);
+        assert_eq!(tabs.len(), 2);
+        assert_eq!(tabs[0].window, 1);
+        assert_eq!(tabs[0].title, "Current");
+        assert_eq!(tabs[0].url, "https://current.example");
+        assert_eq!(tabs[1].window, 2);
+        assert_eq!(tabs[1].title, "Default Index");
+        assert_eq!(tabs[1].url, "https://default.example");
+    }
+
+    #[test]
+    fn get_session_tabs_skips_invalid_indices_and_applies_defaults() {
+        let session = serde_json::json!({
+            "windows": [
+                {
+                    "tabs": [
+                        {
+                            "index": 0,
+                            "entries": [{"title": "Ignored", "url": "https://ignored.example"}]
+                        },
+                        {
+                            "index": 3,
+                            "entries": [{"title": "Too High", "url": "https://high.example"}]
+                        },
+                        {
+                            "index": 1,
+                            "entries": [{}]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let tabs = get_session_tabs(&session);
+        assert_eq!(tabs.len(), 1);
+        assert_eq!(tabs[0].window, 1);
+        assert_eq!(tabs[0].title, "No title");
+        assert_eq!(tabs[0].url, "");
+    }
 }

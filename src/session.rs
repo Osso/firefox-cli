@@ -57,8 +57,13 @@ fn latest_session_recovery(home: &Path) -> Option<PathBuf> {
     newest_file(session_recovery_candidates(home))
 }
 
+fn home_session_recovery() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+    latest_session_recovery(&home)
+}
+
 fn find_session_file() -> Option<PathBuf> {
-    dirs::home_dir().and_then(|home| latest_session_recovery(&home))
+    home_session_recovery()
 }
 
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {
@@ -473,6 +478,15 @@ mod tests {
         assert_eq!(latest, second);
 
         fs::remove_dir_all(&home).expect("cleanup temp test dir");
+    }
+
+    #[test]
+    fn latest_session_recovery_returns_none_for_missing_home() {
+        let home = std::env::temp_dir().join("firefox-cli-missing-home-no-profiles");
+        if home.exists() {
+            std::fs::remove_dir_all(&home).expect("cleanup stale test dir");
+        }
+        assert!(latest_session_recovery(&home).is_none());
     }
 
     #[test]

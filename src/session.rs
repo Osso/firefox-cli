@@ -53,9 +53,12 @@ fn session_recovery_candidates(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+fn latest_session_recovery(home: &Path) -> Option<PathBuf> {
+    newest_file(session_recovery_candidates(home))
+}
+
 fn find_session_file() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    newest_file(session_recovery_candidates(&home))
+    dirs::home_dir().and_then(|home| latest_session_recovery(&home))
 }
 
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {
@@ -228,7 +231,10 @@ pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionTab, collect_window_session_tabs, filter_session_tabs, get_session_tabs};
+    use super::{
+        SessionTab, collect_window_session_tabs, filter_session_tabs, get_session_tabs,
+        latest_session_recovery,
+    };
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -355,5 +361,30 @@ mod tests {
         assert_eq!(tabs.len(), 1);
         assert_eq!(tabs[0].window, 3);
         assert_eq!(tabs[0].title, "Tab A");
+    }
+
+    #[test]
+    fn latest_session_recovery_prefers_newest_file() {
+        use std::fs;
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_nanos();
+        let home = std::env::temp_dir().join(format!("firefox-cli-session-test-{}", unique));
+        let first = home.join(".mozilla/firefox/profile-a/sessionstore-backups/recovery.jsonlz4");
+        let second = home.join(".mozilla/firefox/profile-b/sessionstore-backups/recovery.jsonlz4");
+
+        fs::create_dir_all(first.parent().expect("first parent")).expect("create first dir");
+        fs::write(&first, b"first").expect("write first");
+        std::thread::sleep(Duration::from_millis(10));
+        fs::create_dir_all(second.parent().expect("second parent")).expect("create second dir");
+        fs::write(&second, b"second").expect("write second");
+
+        let latest = latest_session_recovery(&home).expect("latest session file");
+        assert_eq!(latest, second);
+
+        fs::remove_dir_all(&home).expect("cleanup temp test dir");
     }
 }

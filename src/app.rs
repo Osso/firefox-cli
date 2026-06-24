@@ -9,25 +9,35 @@ use crate::cli::{Cli, Command};
 use crate::session::handle_session;
 
 fn run_cli(cli: Cli) -> Result<()> {
-    match cli.command {
-        Command::Session { action } => handle_session(action, cli.json)?,
-        Command::Open { url } => open_url(url, cli.port, cli.json)?,
-        Command::Back => go_back(cli.port)?,
-        Command::Forward => go_forward(cli.port)?,
-        Command::Reload => reload_page(cli.port)?,
-        Command::Close => close_browser(cli.port)?,
-        Command::Click { selector } => click_element(selector, cli.port)?,
-        Command::Type { selector, text } => type_into_element(selector, text, cli.port)?,
-        Command::Fill { selector, text } => fill_element(selector, text, cli.port)?,
-        Command::Press { key } => press_key(key, cli.port)?,
-        Command::Screenshot { path, full } => take_screenshot(path, full, cli.port)?,
-        Command::Eval { script } => eval_script(script, cli.port, cli.json)?,
-        Command::Get { what } => handle_get(what, cli.port, cli.json)?,
-        Command::Tabs { action } => handle_tabs(action, cli.port, cli.json)?,
-        Command::Wait { target, url } => wait_for(target, url, cli.port)?,
+    let Cli {
+        command,
+        port,
+        json,
+    } = cli;
+    match command {
+        Command::Session { action } => handle_session(action, json),
+        other => run_browser_command(other, port, json),
     }
+}
 
-    Ok(())
+fn run_browser_command(command: Command, port: u16, json: bool) -> Result<()> {
+    match command {
+        Command::Open { url } => open_url(url, port, json),
+        Command::Back => go_back(port),
+        Command::Forward => go_forward(port),
+        Command::Reload => reload_page(port),
+        Command::Close => close_browser(port),
+        Command::Click { selector } => click_element(selector, port),
+        Command::Type { selector, text } => type_into_element(selector, text, port),
+        Command::Fill { selector, text } => fill_element(selector, text, port),
+        Command::Press { key } => press_key(key, port),
+        Command::Screenshot { path, full } => take_screenshot(path, full, port),
+        Command::Eval { script } => eval_script(script, port, json),
+        Command::Get { what } => handle_get(what, port, json),
+        Command::Tabs { action } => handle_tabs(action, port, json),
+        Command::Wait { target, url } => wait_for(target, url, port),
+        Command::Session { .. } => unreachable!(),
+    }
 }
 
 pub fn run() -> Result<()> {

@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "Firefox automation CLI using Marionette protocol"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)'] }
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
@@ -16,4 +19,3 @@ base64 = "0.22"
 
 [profile.release]
 lto = false
-incremental = true

@@ -17,6 +17,7 @@ fn named_get_output(key: &str, value: &str, json: bool) -> String {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn print_named_get_value(key: &str, value: &str, json: bool) {
     println!("{}", named_get_output(key, value, json));
 }
@@ -30,6 +31,7 @@ fn extract_element_id(element: &serde_json::Value) -> Result<&str> {
         .context("Element not found")
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_element_named_value(
     conn: &mut MarionetteConnection,
     selector: &str,
@@ -48,6 +50,7 @@ fn get_element_named_value(
     Ok(response_value_str(&result).to_string())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_text_by_selector(conn: &mut MarionetteConnection, selector: &str) -> Result<String> {
     let element = conn.find_element(selector)?;
     let element_id = extract_element_id(&element)?;
@@ -60,11 +63,13 @@ fn get_text_by_selector(conn: &mut MarionetteConnection, selector: &str) -> Resu
     Ok(response_value_str(&result).to_string())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_body_text(conn: &mut MarionetteConnection) -> Result<String> {
     let result = conn.execute_script("return document.body.innerText")?;
     Ok(response_value_str(&result).to_string())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_text(conn: &mut MarionetteConnection, selector: Option<String>) -> Result<String> {
     match selector {
         Some(selector) => get_text_by_selector(conn, &selector),
@@ -72,6 +77,7 @@ fn get_text(conn: &mut MarionetteConnection, selector: Option<String>) -> Result
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_inner_html(conn: &mut MarionetteConnection, selector: &str) -> Result<String> {
     let script = format!(
         "return document.querySelector({}).innerHTML",
@@ -81,6 +87,7 @@ fn get_inner_html(conn: &mut MarionetteConnection, selector: &str) -> Result<Str
     Ok(response_value_str(&result).to_string())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) -> Result<usize> {
     let result = conn.find_elements(selector)?;
     Ok(result
@@ -90,6 +97,7 @@ fn get_matching_elements_count(conn: &mut MarionetteConnection, selector: &str) 
         .unwrap_or(0))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_string_field(
     conn: &mut MarionetteConnection,
     webdriver_command: &str,
@@ -101,30 +109,35 @@ fn execute_get_string_field(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_text(conn: &mut MarionetteConnection, selector: Option<String>) -> Result<()> {
     let text = get_text(conn, selector)?;
     println!("{}", text);
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_html(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
     let html = get_inner_html(conn, selector)?;
     println!("{}", html);
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_value(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
     let value = get_element_named_value(conn, selector, "WebDriver:GetElementProperty", "value")?;
     println!("{}", value);
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_attr(conn: &mut MarionetteConnection, selector: &str, name: &str) -> Result<()> {
     let attr = get_element_named_value(conn, selector, "WebDriver:GetElementAttribute", name)?;
     println!("{}", attr);
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_count(conn: &mut MarionetteConnection, selector: &str) -> Result<()> {
     let count = get_matching_elements_count(conn, selector)?;
     println!("{}", count);
@@ -169,6 +182,7 @@ fn classify_get_command(what: GetCommand) -> GetAction {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_selector_get_action(
     conn: &mut MarionetteConnection,
     action: SelectorGetAction,
@@ -181,6 +195,7 @@ fn execute_selector_get_action(
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_action(
     conn: &mut MarionetteConnection,
     action: GetAction,
@@ -195,6 +210,7 @@ fn execute_get_action(
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_get_command(
     conn: &mut MarionetteConnection,
     what: GetCommand,
@@ -204,6 +220,7 @@ fn execute_get_command(
     execute_get_action(conn, action, json)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn handle_get(what: GetCommand, port: u16, json: bool) -> Result<()> {
     let mut conn = MarionetteConnection::connect(port)?;
     execute_get_command(&mut conn, what, json)

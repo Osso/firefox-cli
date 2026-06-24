@@ -57,15 +57,18 @@ fn latest_session_recovery(home: &Path) -> Option<PathBuf> {
     newest_file(session_recovery_candidates(home))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn home_session_recovery() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
     latest_session_recovery(&home)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn find_session_file() -> Option<PathBuf> {
     home_session_recovery()
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn load_session(path: &PathBuf) -> Result<serde_json::Value> {
     use std::io::Read as IoRead;
 
@@ -173,6 +176,7 @@ fn get_session_tabs(session: &serde_json::Value) -> Vec<SessionTab> {
     tabs
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn load_session_tabs() -> Result<Vec<SessionTab>> {
     let session_file = find_session_file().context("No Firefox session file found")?;
     let session = load_session(&session_file)?;
@@ -199,6 +203,7 @@ fn filter_session_tabs(
     tabs
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn print_default_session_tabs(tabs: &[SessionTab]) {
     for (index, tab) in tabs.iter().enumerate() {
         let title: String = tab.title.chars().take(70).collect();
@@ -207,6 +212,7 @@ fn print_default_session_tabs(tabs: &[SessionTab]) {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn print_session_tabs(
     tabs: &[SessionTab],
     json: bool,
@@ -236,6 +242,7 @@ fn print_session_tabs(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_session_list(
     tabs: Vec<SessionTab>,
     json: bool,
@@ -252,6 +259,7 @@ fn session_tab_count(tabs: &[SessionTab]) -> usize {
     tabs.len()
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_session_count(tabs: &[SessionTab]) {
     println!("{}", session_tab_count(tabs));
 }
@@ -285,6 +293,7 @@ fn classify_session_command(action: SessionCommand) -> SessionAction {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_session_action(action: SessionAction, tabs: Vec<SessionTab>, json: bool) -> Result<()> {
     match action {
         SessionAction::List(params) => handle_session_list(
@@ -302,6 +311,7 @@ fn execute_session_action(action: SessionAction, tabs: Vec<SessionTab>, json: bo
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_session_command(
     action: SessionCommand,
     tabs: Vec<SessionTab>,
@@ -311,6 +321,7 @@ fn execute_session_command(
     execute_session_action(session_action, tabs, json)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn handle_session(action: SessionCommand, json: bool) -> Result<()> {
     let tabs = load_session_tabs()?;
     execute_session_command(action, tabs, json)

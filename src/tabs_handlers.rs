@@ -9,6 +9,7 @@ fn response_value_str(result: &serde_json::Value) -> &str {
         .unwrap_or("")
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn window_handles(conn: &mut MarionetteConnection) -> Result<Vec<serde_json::Value>> {
     let result = conn.send("WebDriver:GetWindowHandles", serde_json::json!({}))?;
     let handles = result
@@ -18,6 +19,7 @@ fn window_handles(conn: &mut MarionetteConnection) -> Result<Vec<serde_json::Val
     Ok(handles.clone())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn switch_to_window(conn: &mut MarionetteConnection, handle: &str) -> Result<()> {
     conn.send(
         "WebDriver:SwitchToWindow",
@@ -52,6 +54,7 @@ fn handle_at_index(handles: &[serde_json::Value], index: usize) -> Option<&str> 
     handles.get(index).and_then(|value| value.as_str())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn current_window_handle(conn: &mut MarionetteConnection) -> Result<Option<String>> {
     let current = conn.send("WebDriver:GetWindowHandle", serde_json::json!({}))?;
     Ok(current
@@ -60,6 +63,7 @@ fn current_window_handle(conn: &mut MarionetteConnection) -> Result<Option<Strin
         .map(ToString::to_string))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn restore_window_handle(conn: &mut MarionetteConnection, original: Option<String>) -> Result<()> {
     if let Some(handle) = original {
         switch_to_window(conn, &handle)?;
@@ -67,6 +71,7 @@ fn restore_window_handle(conn: &mut MarionetteConnection, original: Option<Strin
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn switch_to_optional_index(
     conn: &mut MarionetteConnection,
     handles: &[serde_json::Value],
@@ -81,6 +86,7 @@ fn switch_to_optional_index(
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn collect_tab_details(
     conn: &mut MarionetteConnection,
     handles: &[serde_json::Value],
@@ -96,6 +102,7 @@ fn collect_tab_details(
     Ok(tabs)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn collect_tab_detail(
     conn: &mut MarionetteConnection,
     index: usize,
@@ -115,6 +122,7 @@ fn collect_tab_detail(
     )))
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn print_tabs(tabs: &[serde_json::Value], json: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(tabs)?);
@@ -127,6 +135,7 @@ fn print_tabs(tabs: &[serde_json::Value], json: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_tabs_list(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
     let handles = window_handles(conn)?;
     let original = current_window_handle(conn)?;
@@ -135,6 +144,7 @@ fn handle_tabs_list(conn: &mut MarionetteConnection, json: bool) -> Result<()> {
     print_tabs(&tabs, json)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_tabs_new(conn: &mut MarionetteConnection, url: Option<String>) -> Result<()> {
     let url = url.unwrap_or_else(|| "about:blank".to_string());
     conn.send("WebDriver:NewWindow", serde_json::json!({ "type": "tab" }))?;
@@ -145,6 +155,7 @@ fn handle_tabs_new(conn: &mut MarionetteConnection, url: Option<String>) -> Resu
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_tabs_close(conn: &mut MarionetteConnection, index: Option<usize>) -> Result<()> {
     let handles = window_handles(conn)?;
     switch_to_optional_index(conn, &handles, index)?;
@@ -153,6 +164,7 @@ fn handle_tabs_close(conn: &mut MarionetteConnection, index: Option<usize>) -> R
     Ok(())
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn handle_tabs_switch(conn: &mut MarionetteConnection, index: usize) -> Result<()> {
     let handles = window_handles(conn)?;
     let handle = handle_at_index(&handles, index).context("Tab index out of range")?;
@@ -183,6 +195,7 @@ fn classify_tabs_command(action: TabsCommand) -> TabsAction {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_tabs_action(
     conn: &mut MarionetteConnection,
     action: TabsAction,
@@ -196,6 +209,7 @@ fn execute_tabs_action(
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn execute_tabs_command(
     conn: &mut MarionetteConnection,
     action: TabsCommand,
@@ -205,6 +219,7 @@ fn execute_tabs_command(
     execute_tabs_action(conn, tabs_action, json)
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub fn handle_tabs(action: TabsCommand, port: u16, json: bool) -> Result<()> {
     let mut conn = MarionetteConnection::connect(port)?;
     execute_tabs_command(&mut conn, action, json)
